@@ -1,0 +1,40 @@
+name: Build arm64 Debug APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: stable
+
+      # 升级 Kotlin 插件版本，修复 “expected 1.6.0 / found 1.8.x” 的报错
+      - name: Bump Kotlin to 1.8.22
+        working-directory: simple_live_app/android
+        run: |
+          sed -i.bak "s/ext.kotlin_version *= *['\"][0-9.]\+['\"]/ext.kotlin_version = '1.8.22'/" build.gradle
+          grep -n "ext.kotlin_version" -n build.gradle || true
+
+      - name: Get packages
+        working-directory: simple_live_app
+        run: flutter pub get
+
+      # 直接用 Gradle 强制 Debug 变体，并限制为 arm64
+      - name: Assemble Debug (arm64 only)
+        working-directory: simple_live_app/android
+        run: |
+          ./gradlew clean
+          ./gradlew :app:assembleDebug -Ptarget-platform=android-arm64 -Ptarget=../lib/main.dart
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-arm64-v8a-debug.apk
+          path: simple_live_app/build/app/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
