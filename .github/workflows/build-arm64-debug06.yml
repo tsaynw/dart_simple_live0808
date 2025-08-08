@@ -1,0 +1,55 @@
+name: Build arm64 Debug APK 06
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: stable
+
+      # 升级 Kotlin 插件版本
+      - name: Bump Kotlin to 1.8.22
+        working-directory: simple_live_app/android
+        run: |
+          sed -i.bak "s/ext.kotlin_version *= *['\"][0-9.]\+['\"]/ext.kotlin_version = '1.8.22'/" build.gradle
+          grep -n "ext.kotlin_version" build.gradle || true
+
+      # 最保守的修复：只注释掉 signingConfig 行
+      - name: Fix signing config conservatively
+        working-directory: simple_live_app/android
+        run: |
+          # 备份原文件
+          cp app/build.gradle app/build.gradle.original
+          
+          # 只注释掉包含 signingConfig 的行
+          sed -i '/signingConfig signingConfigs.release/s/^/\/\/ /' app/build.gradle
+          
+          # 显示修改结果
+          echo "=== Lines containing signingConfig ==="
+          grep -n "signingConfig" app/build.gradle || echo "No signingConfig found"
+
+      - name: Get packages
+        working-directory: simple_live_app
+        run: flutter pub get
+
+      # 构建调试包
+      - name: Build arm64 debug APK
+        working-directory: simple_live_app
+        run: |
+          flutter build apk --debug --target-platform=android-arm64
+          mv build/app/outputs/flutter-apk/app-debug.apk \
+             build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-arm64-v8a-debug.apk
+          path: simple_live_app/build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk
+          if-no-files-found: error
