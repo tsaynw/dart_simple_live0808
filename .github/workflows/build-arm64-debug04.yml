@@ -1,0 +1,88 @@
+name: Build arm64 Debug APK 04
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: stable
+
+      # 升级 Kotlin 插件版本
+      - name: Bump Kotlin to 1.8.22
+        working-directory: simple_live_app/android
+        run: |
+          sed -i.bak "s/ext.kotlin_version *= *['\"][0-9.]\+['\"]/ext.kotlin_version = '1.8.22'/" build.gradle
+          grep -n "ext.kotlin_version" build.gradle || true
+
+      # 彻底修复签名配置
+      - name: Fix signing config completely
+        working-directory: simple_live_app/android
+        run: |
+          # 备份原文件
+          cp app/build.gradle app/build.gradle.bak
+          # 删除所有 signingConfig 相关配置
+          sed -i '/signingConfigs/,/}/d' app/build.gradle
+          sed -i '/signingConfig/d' app/build.gradle
+          # 确保 buildTypes 中只有 debug 配置
+          cat > app/build.gradle.tmp << 'EOF'
+          android {
+              compileSdkVersion flutter.compileSdkVersion
+              ndkVersion flutter.ndkVersion
+              
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_1_8
+                  targetCompatibility JavaVersion.VERSION_1_8
+              }
+              
+              kotlinOptions {
+                  jvmTarget = '1.8'
+              }
+              
+              sourceSets {
+                  main.java.srcDirs += 'src/main/kotlin'
+              }
+              
+              defaultConfig {
+                  applicationId "com.xiaoyaocz.simple_live_app"
+                  minSdkVersion flutter.minSdkVersion
+                  targetSdkVersion flutter.targetSdkVersion
+                  versionCode flutterVersionCode.toInteger()
+                  versionName flutterVersionName
+              }
+              
+              buildTypes {
+                  debug {
+                      // 调试版本，无需签名
+                  }
+              }
+          }
+          EOF
+          # 替换整个 android 块
+          sed -i '/android {/,/}/c\' app/build.gradle
+          cat app/build.gradle.tmp >> app/build.gradle
+
+      - name: Get packages
+        working-directory: simple_live_app
+        run: flutter pub get
+
+      # 构建调试包
+      - name: Build arm64 debug APK
+        working-directory: simple_live_app
+        run: |
+          flutter build apk --debug --target-platform=android-arm64
+          mv build/app/outputs/flutter-apk/app-debug.apk \
+             build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-arm64-v8a-debug.apk
+          path: simple_live_app/build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk
+          if-no-files-found: error
