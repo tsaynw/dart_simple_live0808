@@ -1,5 +1,4 @@
 name: Build arm64 Debug APK 03
-
 on:
   workflow_dispatch:
 
@@ -27,23 +26,29 @@ jobs:
         run: |
           # 备份原文件
           cp app/build.gradle app/build.gradle.bak
-          # 注释掉 release signingConfig 或改为 debug
+          # 替换 release 签名配置为 debug
           sed -i 's/signingConfig signingConfigs.release/signingConfig signingConfigs.debug/g' app/build.gradle
-          # 或者完全注释掉 signingConfig 行
+          # 注释掉原 release 签名配置行（双重保障）
           sed -i 's/^[[:space:]]*signingConfig[[:space:]]*signingConfigs\.release/#&/' app/build.gradle
 
+      # 获取项目依赖
       - name: Get packages
         working-directory: simple_live_app
         run: flutter pub get
 
-      # 构建调试包
+      # 构建 arm64 调试包（含禁用水印参数）
       - name: Build arm64 debug APK
         working-directory: simple_live_app
         run: |
-          flutter build apk --debug --target-platform=android-arm64
+          flutter clean  # 清理缓存，避免构建冲突
+          # 构建命令：指定 debug 模式、arm64 架构，注入禁用水印参数
+          flutter build apk --debug --target-platform=android-arm64 \
+            --dart-define=DEBUG_WATERMARK=false
+          # 重命名 APK 便于识别
           mv build/app/outputs/flutter-apk/app-debug.apk \
-             build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk
+            build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk
 
+      # 上传构建产物
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
