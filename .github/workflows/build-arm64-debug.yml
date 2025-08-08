@@ -1,0 +1,34 @@
+name: Build arm64 Debug APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: stable
+
+      - name: Get packages
+        working-directory: simple_live_app
+        run: flutter pub get
+
+      # 仅构建 arm64-v8a 的调试包；无签名、无发布
+      - name: Build arm64 debug APK
+        working-directory: simple_live_app
+        run: |
+          flutter build apk --debug --target-platform=android-arm64
+          mv build/app/outputs/flutter-apk/app-debug.apk \
+             build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-arm64-v8a-debug.apk
+          path: simple_live_app/build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk
+          if-no-files-found: error
