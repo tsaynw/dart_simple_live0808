@@ -1,0 +1,48 @@
+name: Build ARM64 Debug
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
+
+    - name: Set up Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.16.0'  # 可根据项目需求调整版本
+
+    - name: Install dependencies
+      run: flutter pub get
+
+    - name: Enable Flutter web (if needed)
+      run: flutter config --enable-web
+
+    - name: Build ARM64 Debug APK
+      run: |
+        flutter clean
+        # 关键修改：通过 dart-define 注入禁用调试水印的参数
+        flutter build appbundle \
+          --debug \
+          --target-platform android-arm64 \
+          --dart-define=DEBUG_WATERMARK=false  # 注入全局参数用于控制水印
+      working-directory: ./  # 确保是项目根目录（根据实际结构调整）
+
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-arm64-debug
+        path: build/app/outputs/bundle/debug/app-debug.aab
